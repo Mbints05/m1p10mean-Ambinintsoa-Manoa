@@ -3,11 +3,30 @@ const bodyParser = require('body-parser')
 const MongoClient = require('mongodb').MongoClient
 const app = express()
 const functions = require('./functions')
+const nodemailer = require('nodemailer')
 
 var datetime = require('node-datetime');
 var dt = datetime.create();
 var format = dt.format('Y-m-d H:M:S');
 var formatDate = dt.format('Y-m-d');
+
+var resp = 'systemealerte05@gmail.com';
+var recept = 'rakotombin@gmail.com';
+
+let mailTransporter = nodemailer.createTransport({
+  service:'gmail',
+  auth:{
+    user:resp,
+    pass:'oadncykwcxfsutal'
+  }
+});
+
+let mailDetails = {
+  from:resp,
+  to:recept,
+  subject:'Test Mail NODE JS',
+  text:"Test d'envoi réussi à "+recept+" sur Node JS"
+};
 
 require('./dotenv')
 
@@ -40,6 +59,14 @@ MongoClient.connect(connectionString, { useUnifiedTopology: true })
           res.json({ quotes: quotes })
         })
         .catch(/* ... */)
+    })
+
+    app.get('/sendMail', (req, res) => {
+      mailTransporter.sendMail(mailDetails)
+        .then(result=>{
+          res.json('Email sent')
+        })
+        .catch(res.json('Email errors'))
     })
 
     app.get('/details/:matricule', (req, res) => {
