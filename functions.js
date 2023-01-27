@@ -30,21 +30,150 @@ function insertReparation(reparation,probleme){
 		}
 	)
 }
-
-function pourcReparationVehicle(reparation,matricule){
-	var somme = reparation.countDocuments({carMatricul:matricule});
-	var repeared = reparation.aggregate({$match:{carMatricul:matricule}},{$group:{_id:null,sum_val:{$sum:'$avancement'}}});
-	var pourcentage = somme;
-	return pourcentage;
+function insertFacture(reparation,collection,matricule){
+	var date = [];
+	return reparation.find({carMatricul:matricule,etat:2}).toArray()
+		.then(sortie => {
+			for(var i=0;i<sortie.length;i++){
+				date.push({
+					reference : 'FACT'+sortie[i].carMatricul,
+					carMark :sortie[i].carMark,
+					carModel :sortie[i].carModel,
+					carMatricul :sortie[i].carMatricul,
+					clientName :sortie[i].clientName,
+					clientUsername :sortie[i].clientUsername,
+					clientContact :sortie[i].clientContact,
+					piece :sortie[i].piece,
+					montant:sortie[i].prix,
+					dateSortie : sortie[i].dateSortie,
+					dateheure : format
+				})
+				
+			}
+			return collection.insertMany(date,{ordered:true})			
+		})
 }
 
-function validationSortie(reparation){
-	return 
+function pourcReparationVehicle(reparation,matricule){
+	var pourc = 0;
+	return reparation.find({carMatricul:matricule}).toArray()
+		.then(result => {
+			for(var i=0;i<result.length;i++){
+				pourc += result[i].avancement
+			}
+			return pourc
+		}) 
+}
+function totalPourc(reparation,matricule){
+	return reparation.countDocuments({carMatricul:matricule})
+		.then(result => {
+			return result*100
+		})	
+}
+function verifSortie(reparation,matricule){
+	var retour = 2;
+	return pourcReparationVehicle(reparation,matricule)
+		.then(result => {
+			return totalPourc(reparation,matricule)
+				.then(resultat => {
+					if(result < resultat) retour = 1
+					if(result === resultat) retour = 0
+					return retour	
+				})
+		})
+}
+function validationSortie(vr,reparation,matricule){
+		return reparation.updateMany(
+			{
+				carMatricul:matricule,
+				etat:1
+			},{
+				$set:{
+					etat:2,
+					dateSortie:format
+				}
+			},{upsert:true}
+		).then(result =>{
+			return vr.insertOne({
+				matricule : matricule,
+				dateSortie : format
+			})
+		})	
+}
+function tempsReparationVoiture(reparation,matricule){
+	var pipeline = [
+		{$match :{carMatricul:matricule,etat:2}},
+		{$group:{_id:{daty:"$dateSortie"},hoursDiff:{$avg:{
+					$dateDiff:{
+						startDate :{$toDate:"$dateheureDebut"},
+						endDate :{$toDate:"$dateheureFin"},
+						unit:"second"
+					}
+				}}}}
+	];
+	return reparation.aggregate(pipeline).toArray();
+}
+function chiffreDaffaire(facture,filter){
+	var pipeline = null;
+	if(filter === 'jour'){
+		pipeline = [{$group:{_id:{daty:"$dateSortie"},montant:{$sum:"$montant"}}}];		
+	}if(filter === 'mois'){
+		pipeline = [{$group:{_id:{mois:{$month:{$dateFromString:{dateString:"$dateSortie",format:"%Y-%m-%d %H:%M:%S"}}},annee:{$year:{$dateFromString:{dateString:"$dateSortie",format:"%Y-%m-%d %H:%M:%S"}}}},montant:{$sum:"$montant"}}}];
+	}
+	return facture.aggregate(pipeline).toArray()
+}
+
+function depense(depense,filter){
+	var pipeline = null;
+	if(filter === 'jour'){
+		pipeline = [{$group:{_id:{daty:"$dateDepense"},montant:{$sum:"$prix"}}}];		
+	}if(filter === 'mois'){
+		pipeline = [{$group:{_id:{mois:{$month:{$dateFromString:{dateString:"$dateDepense",format:"%Y-%m-%d"}}},annee:{$year:{$dateFromString:{dateString:"$dateDepense",format:"%Y-%m-%d"}}}},montant:{$sum:"$prix"}}}];
+	}
+	return depense.aggregate(pipeline).toArray()	
+}
+function benefice(depenses,facture){
+	var data = [];
+	var mois =null;
+	var annee= null;
+	var benefice = null;
+	var taille = null;
+	return depense(depenses,'mois')
+		.then(dep =>{
+			return chiffreDaffaire(facture,"mois")
+				.then(affaire=>{
+					if(dep.length<=affaire.length){
+						mois = affaire;
+						annee = affaire;
+						taille = affaire.length;
+					}else{
+						mois = dep;
+						annee = dep;
+						taille = dep.length
+					}
+					for(var i=0;i<taille;i++){
+						 benefice = affaire[i].montant - dep[i].montant;
+						data.push({
+							mois:mois[i]._id.mois,
+							annee:annee[i]._id.annee,
+							chiffre:affaire[i].montant,
+							deps:dep[i].montant,
+							benefice:benefice
+						})
+					}
+					return data;
+				})		
+		})	
 }
 
 exports.listVehicle = listVehicle;
 exports.insertVehicle = insertVehicle;
-exports.deleteVehicle = deleteVehicle;
 exports.getVehicleDetails = getVehicleDetails;
 exports.insertReparation = insertReparation;
-exports.pourcReparationVehicle = pourcReparationVehicle;
+exports.verifSortie = verifSortie;
+exports.validationSortie = validationSortie;
+exports.insertFacture = insertFacture;
+exports.chiffreDaffaire = chiffreDaffaire;
+exports.tempsReparationVoiture = tempsReparationVoiture;
+exports.depense = depense;
+exports.benefice = benefice;
