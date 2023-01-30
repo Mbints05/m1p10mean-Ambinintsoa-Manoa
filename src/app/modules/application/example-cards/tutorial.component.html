@@ -1,0 +1,41 @@
+<div class="container py-5">
+  <div class="row">
+    <h2>Liste des véhicules</h2>
+    <hr/>
+    <div class="col-6 col-sm-6 col-md-6 col-lg-6 col-xl-6 mb-6" >
+      <h3>Liste des véhicules déposées</h3>
+      <div class="card nga-card-angular nga-card-cascade" *ngFor="let item of vehicules">
+        <div class="nga-card-img">
+        </div>
+        <div class="card-body pt-0">
+          <h4 class="h6 card-title">
+            <span style="font-size: 14px;"><strong>{{ item.matricule }}
+              </strong></span>
+          </h4>
+          <p>Marque: {{ item.matricule }}</p>
+          <p>Modele: {{ item.modele }}</p>
+          <p>Client: {{ item.name }} {{ item.lastname }}</p>
+          <p>Contact: {{ item.contact }}</p>
+        </div>
+        <a routerLink="/{{ item.matricule }}">Prendre</a>
+      </div>
+    </div>
+    <div class="col-6 col-sm-6 col-md-6 col-lg-6 col-xl-6 mb-6" >
+      <h3>Liste des véhicules dans le garage</h3>
+      <div class="card nga-card-angular nga-card-cascade" *ngFor="let item of vehicules">
+        <div class="nga-card-img">
+        </div>
+        <div class="card-body pt-0">
+          <h4 class="h6 card-title">
+            <span style="font-size: 14px;"><strong>{{ item.matricule }}
+              </strong></span>
+          </h4>
+          <p>Marque: {{ item.matricule }}</p>
+          <p>Modele: {{ item.modele }}</p>
+          <p>Client: {{ item.name }} {{ item.lastname }}</p>
+          <p>Contact: {{ item.contact }}</p>
+        </div>
+        <a routerLink="/{{ item.matricule }}">Réparer</a>
+      </div>
+    </div>
+</div>
