@@ -24,8 +24,8 @@ let mailTransporter = nodemailer.createTransport({
 let mailDetails = {
   from:resp,
   to:recept,
-  subject:'Test Mail NODE JS',
-  text:"Test d'envoi réussi à "+recept+" sur Node JS"
+  subject:'Voiture réparée',
+  text:"Votre voiture est réparée,vous pouvez la récupérer."
 };
 
 require('./dotenv')
@@ -42,10 +42,11 @@ MongoClient.connect(connectionString, { useUnifiedTopology: true })
     const reparation = db.collection('Reparation')
     const facture = db.collection('Facture')
     const depense = db.collection('depense')
+    const depot = db.collection('depot')
+    const user = db.collection('user')
     // ========================
     // Middlewares
     // ========================
-    //app.set('view engine', 'ejs')
     app.use(bodyParser.json())
     app.use(bodyParser.urlencoded({ extended: true }))
     app.use(express.static('public'));
@@ -53,23 +54,45 @@ MongoClient.connect(connectionString, { useUnifiedTopology: true })
     // ========================
     // Routes
     // ========================
-    app.get('/', (req, res) => {
+    app.get('/api/listVehicle', (req, res) => {
       functions.listVehicle(vC)
         .then(quotes => {
-          res.json({ quotes: quotes })
+          console.log('Appel')
+          res.send(quotes)
         })
         .catch(/* ... */)
     })
 
-    app.get('/sendMail', (req, res) => {
-      mailTransporter.sendMail(mailDetails)
+    app.post('/api/insertClient',(req,res)=>{
+      user.insertOne({
+        nom:req.body.nom,
+        prenom:req.body.prenom,
+        contact:req.body.contact,
+        email:req.body.email,
+        mdp:req.body.mdp,
+        adresse:req.body.adresse,
+        role:'Client'
+      })
         .then(result=>{
-          res.json('Email sent')
+          res.json("OK")
         })
-        .catch(res.json('Email errors'))
     })
 
-    app.get('/details/:matricule', (req, res) => {
+    app.post('/api/verifLogin',(req,res)=>{
+      user.findOne({
+        email:req.body.email,
+        mdp:req.body.mdp
+      })
+        .then(result=>{
+          if(result === null){
+            res.send('Erreur')
+          }else{
+            res.send('Ok')
+          }
+        })
+    })
+
+    app.get('/api/details/:matricule', (req, res) => {
       functions.getVehicleDetails(probleme,req.params.matricule)
         .then(quotes => {
           res.json({ details: quotes })
@@ -77,8 +100,8 @@ MongoClient.connect(connectionString, { useUnifiedTopology: true })
         .catch(/* ... */)
     })
 
-    app.post('/deposer',(req, res) => {
-      probleme.findOne({carMatricul:req.body.matricule,piece:req.body.piece})
+    app.post('/api/debutReparation',(req, res) => {
+      probleme.findOne({carMatricul:req.body.matricule,piece:req.body.piece,etat:1})
         .then(result => {
           if(result === null){
             res.json('Requete introuvable')
@@ -109,7 +132,36 @@ MongoClient.connect(connectionString, { useUnifiedTopology: true })
         .catch()
     })
 
-    app.post('/reparer', (req, res) => {
+    app.get('/api/deposer/:matricule',(req, res) => {
+      probleme.findOne({carMatricul:req.params.matricule,etat:1})
+        .then(result => {
+          if(result === null){
+            res.json('Requete introuvable')
+          }else{
+            depot.insertOne({
+              dateheure:format,
+              etat:1,
+              userName:result[0].clientName,
+              userSurname:result[0].clientUsername,
+              userContact:result[0].clientContact,
+              garageNom:'E-Garage',
+              garageAdresse:'Bis000Logt00',
+              clientName:result[0].clientName,
+              clientSurname:result[0].clientUsername,
+              clientContact:result[0].clientContact,
+              carMark:result[0].carMark,
+              carModel:result[0].carModel,
+              carMatricul:result[0].carMatricul
+            })
+              .then(resultat => {
+                  res.send("Insertion dans le depot");           
+              })  
+          }
+        })
+        .catch()
+    })
+
+    app.post('/api/reparer', (req, res) => {
       reparation.findOne(
         {
           carMatricul:req.body.matricule,
@@ -163,12 +215,16 @@ MongoClient.connect(connectionString, { useUnifiedTopology: true })
     })
 
 
-    app.post('/validation', (req, res) => {
+    app.post('/api/validation', (req, res) => {
       functions.verifSortie(reparation,req.body.matricule).then(val =>{
         if(val === 0){
           functions.validationSortie(vR,reparation,req.body.matricule)
             .then(result => {
-              res.json(result)    
+              mailTransporter.sendMail(mailDetails)
+              .then(result=>{
+                res.json('Email sent')
+              })
+              .catch(res.json('Email errors'))    
             })
         }else{
           res.json("La voiture "+req.body.matricule+" ne peut pas encore sortir.")
@@ -176,7 +232,7 @@ MongoClient.connect(connectionString, { useUnifiedTopology: true })
       })
     })
 
-    app.get('/facture/:matricule', (req, res) => {
+    app.get('/api/facture/:matricule', (req, res) => {
       functions.insertFacture(reparation,facture,req.params.matricule)
         .then(result =>{
           facture.find({carMatricul:req.params.matricule,dateheure:format}).toArray()
@@ -186,28 +242,28 @@ MongoClient.connect(connectionString, { useUnifiedTopology: true })
         })
     })
 
-    app.get('/listeVoitureRepare', (req, res) => {
+    app.get('/api/listeVoitureRepare', (req, res) => {
       vR.find().toArray()
         .then(result =>{
           res.json(result)
         })
     })
 
-    app.get('/chiffre/:filter', (req, res) => {
+    app.get('/api/chiffre/:filter', (req, res) => {
       functions.chiffreDaffaire(facture,req.params.filter)
         .then(results =>{
           res.json(results)
         })
     })
 
-    app.get('/tempsReparation/:matricule', (req, res) => {
+    app.get('/api/tempsReparation/:matricule', (req, res) => {
       functions.tempsReparationVoiture(reparation,req.params.matricule)
         .then(results =>{
           res.json(results)
         })
     })        
     
-    app.post('/depense', (req, res) => {
+    app.post('/api/depense', (req, res) => {
       
       var nombre = Object.keys(req.body).length;
       for(var i=0;i<nombre;i++){
@@ -218,21 +274,21 @@ MongoClient.connect(connectionString, { useUnifiedTopology: true })
       }
     })
 
-    app.get('/viewDepense', (req, res) => {
+    app.get('/api/viewDepense', (req, res) => {
       functions.depense(depense,'mois')
         .then(results =>{
           res.json(results)
         })
     })
 
-    app.get('/viewBenefice', (req, res) => {
+    app.get('/api/viewBenefice', (req, res) => {
       functions.benefice(depense,facture)
         .then(results =>{
           res.json(results)
         })
     })
 
-    app.post('/quotes', (req, res) => {
+    app.post('/api/quotes', (req, res) => {
       functions.insertVehicle(vC,req.body)
         .then(result => {
           res.redirect('/')
@@ -258,7 +314,7 @@ MongoClient.connect(connectionString, { useUnifiedTopology: true })
         .catch(error => console.error(error))
     })
 
-    app.get('/supprimer/:name', (req, res) => {
+    app.get('/api/supprimer/:name', (req, res) => {
       functions.deleteVehicle(vC,req.params.name)
         .then(result => {
           if (result.deletedCount === 0) {
